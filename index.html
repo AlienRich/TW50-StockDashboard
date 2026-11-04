@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台股加權指數與 0050 戰情即時儀表板</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind 設定擴充 -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151c2c',
+                            900: '#0f172a',
+                            950: '#0a0e1a',
+                        },
+                        twRed: {
+                            DEFAULT: '#ef4444',
+                            dark: '#dc2626',
+                            deep: '#991b1b',
+                        },
+                        twGreen: {
+                            DEFAULT: '#22c55e',
+                            dark: '#16a34a',
+                            deep: '#15803d',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Menlo', 'Consolas', 'Courier New', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- TradingView Lightweight Charts v4 -->
+    <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Apache ECharts v5 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 自定義閃爍動畫 Last Tick Flash */
+        @keyframes flashRed {
+            0% { background-color: rgba(239, 68, 68, 0.4); }
+            100% { background-color: transparent; }
+        }
+        @keyframes flashGreen {
+            0% { background-color: rgba(34, 197, 94, 0.4); }
+            100% { background-color: transparent; }
+        }
+        .tick-flash-red {
+            animation: flashRed 0.8s ease-out;
+        }
+        .tick-flash-green {
+            animation: flashGreen 0.8s ease-out;
+        }
+        /* 更新按鈕炫彩發光閃爍呼吸動畫 */
+        @keyframes refreshGlowPulse {
+            0%, 100% {
+                box-shadow: 0 0 16px rgba(56, 189, 248, 0.7), 0 0 32px rgba(244, 63, 94, 0.4);
+                border-color: #38bdf8;
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 28px rgba(244, 63, 94, 0.95), 0 0 50px rgba(251, 191, 36, 0.7);
+                border-color: #fb7185;
+                transform: scale(1.08);
+            }
+        }
+        .refresh-btn-glow {
+            animation: refreshGlowPulse 1.8s infinite ease-in-out;
+        }
+        /* 自定義滾動條 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased select-none">
+
+    <!-- 頂部導覽列 (Sticky Top Navigation) -->
+    <header class="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3">
+        <div class="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Logo 與標題 (字體放大一倍) -->
+            <div class="flex items-center space-x-3.5">
+                <div class="p-3 bg-gradient-to-br from-rose-500/25 to-blue-500/25 rounded-xl border border-slate-700/80 shadow-lg">
+                    <i data-lucide="trending-up" class="w-8 h-8 text-rose-400"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-3">
+                        <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white drop-shadow-md">台股加權指數 & 0050 戰情即時儀表板</h1>
+                        <span class="text-sm font-mono font-bold px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm">PRO TERMINAL</span>
+                    </div>
+                    <p class="text-base font-mono text-slate-300 font-medium mt-0.5">TAIEX & Yuanta Taiwan 50 Live Intelligence</p>
+                </div>
+            </div>
+
+            <!-- 連線與市場狀態提示 (字體放大一倍，更新按鈕顯眼閃爍) -->
+            <div class="flex items-center gap-3">
+                <!-- 狀態徽章 -->
+                <div id="statusBadge" class="flex items-center gap-2.5 px-4 py-2 rounded-full text-base font-mono font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/40 transition-all shadow-sm">
+                    <span id="statusDot" class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="statusText">即時連線中 (Live)</span>
+                </div>
+
+                <!-- 盤後/收盤提示 -->
+                <div id="marketPhaseBadge" class="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-lg text-base font-mono font-bold bg-slate-800/90 text-slate-200 border border-slate-700 shadow-sm">
+                    <i data-lucide="clock" class="w-5 h-5 text-slate-400"></i>
+                    <span id="marketPhaseText">定盤收盤價</span>
+                </div>
+
+                <!-- 更新時間 -->
+                <div class="flex items-center gap-2 text-base text-slate-300 font-mono font-bold bg-slate-900 px-3.5 py-2 rounded-lg border border-slate-800 shadow-sm">
+                    <i data-lucide="refresh-cw" class="w-5 h-5 text-slate-400"></i>
+                    <span>更新: </span>
+                    <span id="lastUpdatedTime" class="text-white">--:--:--</span>
+                </div>
+
+                <!-- 手動刷新按鈕 (放大 + 顯眼呼吸閃爍效果) -->
+                <button id="refreshBtn" onclick="triggerManualRefresh()" title="點擊立即手動重新整理" class="refresh-btn-glow flex items-center gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-sky-600 via-rose-600 to-amber-600 hover:from-sky-500 hover:via-rose-500 hover:to-amber-500 text-white font-black text-base sm:text-lg tracking-wide border-2 border-white/60 shadow-xl transition-all duration-300 cursor-pointer active:scale-95">
+                    <i data-lucide="rotate-ccw" id="refreshIcon" class="w-6 h-6 text-white stroke-[2.5]"></i>
+                    <span class="font-bold">立即更新</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 離線 / 盤後提示通知橫幅 (字體放大一倍) -->
+    <div id="noticeBanner" class="bg-gradient-to-r from-blue-900/40 via-slate-900/60 to-blue-900/40 border-b border-blue-500/30 px-4 py-2.5 text-base sm:text-lg text-blue-100 font-medium flex items-center justify-between">
+        <div class="max-w-[1920px] mx-auto flex items-center gap-2.5 w-full">
+            <i data-lucide="info" class="w-6 h-6 text-sky-400 flex-shrink-0"></i>
+            <span id="bannerText">📡 系統已載入最新收盤定盤價與籌碼信用統計，已設定為每 5 分鐘安全輪詢一次 (零封鎖保護模式)。</span>
+        </div>
+    </div>
+
+    <!-- 主內容區 -->
+    <main class="max-w-[1920px] mx-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
+
+        <!-- 頂部 4 大資訊摘要卡 (Top KPI Cards) -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            
+            <!-- 1. 加權指數卡片 -->
+            <div id="taiexCard" class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm relative overflow-hidden transition-all duration-300">
+                <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <i data-lucide="bar-chart-2" class="w-4 h-4 text-rose-400"></i>
+                        加權指數 (TAIEX)
+                    </span>
+                    <span id="taiexTime" class="font-mono text-xs sm:text-sm text-slate-400">13:33:00</span>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <div id="taiexPrice" class="text-3xl sm:text-4xl font-black font-mono tracking-tight text-white transition-colors duration-300">
+                        --
+                    </div>
+                    <div id="taiexChangeBadge" class="flex items-center font-mono text-base font-bold px-2.5 py-1 rounded transition-colors">
+                        <span id="taiexChange">--</span>
+                        <span id="taiexChangePct" class="ml-1 text-sm">(--%)</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 mt-3 pt-2.5 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-300">
+                    <div>開盤 <span id="taiexOpen" class="text-slate-100 block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>最高 <span id="taiexHigh" class="text-rose-400 block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>最低 <span id="taiexLow" class="text-emerald-400 block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>昨收 <span id="taiexPrevClose" class="text-slate-200 block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                </div>
+            </div>
+
+            <!-- 2. 三大法人買賣超卡片 -->
+            <div class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <i data-lucide="briefcase" class="w-4 h-4 text-blue-400"></i>
+                        三大法人買賣超 (淨額)
+                    </span>
+                    <span id="instDate" class="font-mono text-xs sm:text-sm text-slate-400">--</span>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <div id="instTotal" class="text-3xl sm:text-4xl font-black font-mono tracking-tight text-rose-400">
+                        --
+                    </div>
+                    <span class="text-sm font-mono text-slate-300">合計億元</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 mt-3 pt-2.5 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-300">
+                    <div>外資 <span id="instForeign" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>投信 <span id="instTrust" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>自營商 <span id="instDealer" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                </div>
+            </div>
+
+            <!-- 3. 信用交易 (融資融券) 卡片 -->
+            <div class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400"></i>
+                        市場信用餘額 (融資融券)
+                    </span>
+                    <span id="marginDate" class="font-mono text-xs sm:text-sm text-slate-400">--</span>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <div id="marginBalance" class="text-3xl sm:text-4xl font-black font-mono tracking-tight text-slate-100">
+                        --
+                    </div>
+                    <span id="marginChange" class="text-sm font-mono font-semibold px-2 py-0.5 rounded">--</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 mt-3 pt-2.5 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-300">
+                    <div>融券餘額 <span id="shortBalance" class="text-slate-100 block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>融券增減 <span id="shortChange" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    <div>券資比 <span id="shortMarginRatio" class="text-amber-400 block text-sm sm:text-base font-bold mt-0.5">--%</span></div>
+                </div>
+            </div>
+
+            <!-- 4. 量化多空機率卡片 -->
+            <div class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm">
+                <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
+                    <span class="flex items-center gap-1.5 font-medium">
+                        <i data-lucide="cpu" class="w-4 h-4 text-purple-400"></i>
+                        量化多空機率引擎
+                    </span>
+                    <span id="quantRatingBadge" class="text-xs sm:text-sm font-mono px-2.5 py-0.5 rounded-full border">--</span>
+                </div>
+                <div class="flex items-center justify-between mt-1">
+                    <div class="flex items-baseline gap-2 font-mono">
+                        <span class="text-sm text-slate-300">多方</span>
+                        <span id="bullProbText" class="text-3xl sm:text-4xl font-black text-rose-400">--%</span>
+                    </div>
+                    <div class="flex items-baseline gap-2 font-mono text-right">
+                        <span id="bearProbText" class="text-xl sm:text-2xl font-bold text-emerald-400">--%</span>
+                        <span class="text-sm text-slate-300">空方</span>
+                    </div>
+                </div>
+                <!-- 雙向進度條 -->
+                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex mt-2.5">
+                    <div id="bullBar" class="bg-rose-500 h-full transition-all duration-500" style="width: 50%"></div>
+                    <div id="bearBar" class="bg-emerald-500 h-full transition-all duration-500" style="width: 50%"></div>
+                </div>
+                <div class="flex justify-between items-center mt-2.5 text-xs sm:text-sm font-mono text-slate-300">
+                    <span>RSI(14): <strong id="quantRSI" class="text-slate-100 text-sm sm:text-base">--</strong></span>
+                    <span>均線: <strong id="quantMATrend" class="text-slate-100 text-sm sm:text-base">--</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 主圖表區：加權指數 K 線圖 (60%) + 0050 權重熱力圖 (40%) -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+            
+            <!-- 加權指數圖表卡片 (TradingView Lightweight Charts) -->
+            <div class="lg:col-span-7 bg-slate-900/80 rounded-xl p-3.5 sm:p-4 border border-slate-800 flex flex-col h-[540px]">
+                <!-- 圖表頂部操作列 -->
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-2 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-3">
+                        <span class="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                            <i data-lucide="candlestick-chart" class="w-6 h-6 text-rose-400"></i>
+                            加權指數走勢圖
+                        </span>
+                        <!-- 週期切換：取消 1 分鐘，增加 5 分鐘、60 分鐘、日K (12個月) -->
+                        <div class="flex items-center bg-slate-800/90 rounded-lg p-1 border border-slate-700/80 font-mono font-bold gap-1">
+                            <button id="btn5m" onclick="switchKlineInterval('5m')" class="px-3.5 py-1.5 rounded-md text-white bg-sky-600 shadow-sm transition text-sm sm:text-base font-bold">5分K</button>
+                            <button id="btn60m" onclick="switchKlineInterval('60m')" class="px-3.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700/60 transition text-sm sm:text-base font-bold">60分K</button>
+                            <button id="btn1d" onclick="switchKlineInterval('1d')" class="px-3.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700/60 transition text-sm sm:text-base font-bold">日K (12個月)</button>
+                        </div>
+                    </div>
+
+                    <!-- 均線數值即時標示 -->
+                    <div class="flex items-center gap-4 text-sm sm:text-base font-mono font-bold">
+                        <span class="flex items-center gap-1.5 text-yellow-400">
+                            <span class="w-3 h-1 bg-yellow-400 inline-block rounded-full"></span>
+                            5MA: <span id="valMA5">--</span>
+                        </span>
+                        <span class="flex items-center gap-1.5 text-purple-400">
+                            <span class="w-3 h-1 bg-purple-400 inline-block rounded-full"></span>
+                            20MA: <span id="valMA20">--</span>
+                        </span>
+                        <span class="flex items-center gap-1.5 text-sky-400">
+                            <span class="w-3 h-1 bg-sky-400 inline-block rounded-full"></span>
+                            60MA: <span id="valMA60">--</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 十字線懸停資訊提示條 -->
+                <div id="chartTooltip" class="text-sm sm:text-base font-mono text-slate-200 flex flex-wrap items-center gap-4 mb-2 min-h-[24px]">
+                    <span id="ttDate" class="text-sky-300 font-bold">--</span>
+                    <span>開: <b id="ttOpen" class="text-white">--</b></span>
+                    <span>高: <b id="ttHigh" class="text-rose-400">--</b></span>
+                    <span>低: <b id="ttLow" class="text-emerald-400">--</b></span>
+                    <span>收: <b id="ttClose" class="text-white">--</b></span>
+                    <span>量: <b id="ttVol" class="text-blue-400">--</b></span>
+                </div>
+
+                <!-- 圖表繪製容器 -->
+                <div id="klineChartContainer" class="flex-1 w-full rounded-lg overflow-hidden relative"></div>
+            </div>
+
+            <!-- 0050 權重熱力圖 (Apache ECharts Treemap) -->
+            <div class="lg:col-span-5 bg-slate-900/80 rounded-xl p-3.5 sm:p-4 border border-slate-800 flex flex-col h-[540px]">
+                <div class="flex items-center justify-between mb-2 pb-2.5 border-b border-slate-800/80">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-5 h-5 text-emerald-400"></i>
+                            0050 權重熱力圖 (前 15 大成分股)
+                        </span>
+                    </div>
+                    <!-- 台股紅綠漲跌說明 -->
+                    <div class="flex items-center gap-2.5 text-xs font-mono text-slate-300">
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-rose-500"></span>紅漲</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-slate-700"></span>平盤</span>
+                        <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-emerald-500"></span>綠跌</span>
+                    </div>
+                </div>
+
+                <!-- ECharts 繪製容器 -->
+                <div id="treemapContainer" class="flex-1 w-full rounded-lg overflow-hidden"></div>
+            </div>
+        </section>
+
+        <!-- 下方深度剖析區：三大法人詳細籌碼 & 量化指標特徵剖析 -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
+            
+            <!-- 籌碼與信用看板詳細拆解 (6 欄) -->
+            <div class="lg:col-span-6 bg-slate-900/80 rounded-xl p-3.5 sm:p-5 border border-slate-800">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <span class="text-base sm:text-xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="layers" class="w-5 h-5 text-sky-400"></i>
+                        籌碼結構與信用槓桿看板
+                    </span>
+                    <span class="text-xs sm:text-sm font-mono text-slate-400">單位：新台幣億元 / 張數</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-base">
+                    <!-- 左欄：三大法人買賣超統計 -->
+                    <div class="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/60 space-y-3 font-mono">
+                        <div class="font-bold text-sm sm:text-base text-slate-300 pb-2 border-b border-slate-800 flex justify-between">
+                            <span>三大法人項目</span>
+                            <span>買賣超淨額</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">外資及陸資</span>
+                            <span id="detailForeign" class="font-bold text-base sm:text-lg">--</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">投信基金</span>
+                            <span id="detailTrust" class="font-bold text-base sm:text-lg">--</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">自營商 (自行買賣)</span>
+                            <span id="detailDealerSelf" class="font-bold text-base sm:text-lg">--</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">自營商 (避險)</span>
+                            <span id="detailDealerHedge" class="font-bold text-base sm:text-lg">--</span>
+                        </div>
+                        <div class="pt-2.5 border-t border-slate-800 flex justify-between items-center">
+                            <span class="font-bold text-sm sm:text-base text-slate-200">三大法人合計</span>
+                            <span id="detailTotal" class="font-black text-lg sm:text-xl">--</span>
+                        </div>
+                    </div>
+
+                    <!-- 右欄：融資融券全市場指標 -->
+                    <div class="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/60 space-y-3 font-mono">
+                        <div class="font-bold text-sm sm:text-base text-slate-300 pb-2 border-b border-slate-800 flex justify-between">
+                            <span>信用槓桿指標</span>
+                            <span>餘額 / 增減</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">全市場融資餘額</span>
+                            <span id="detailMarginBal" class="font-bold text-base sm:text-lg text-slate-100">-- 億</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">融資單日增減</span>
+                            <span id="detailMarginDiff" class="font-bold text-base sm:text-lg">-- 億</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">全市場融券餘額</span>
+                            <span id="detailShortBal" class="font-bold text-base sm:text-lg text-slate-100">-- 張</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm sm:text-base">
+                            <span class="text-slate-300">融券單日增減</span>
+                            <span id="detailShortDiff" class="font-bold text-base sm:text-lg">-- 張</span>
+                        </div>
+                        <div class="pt-2.5 border-t border-slate-800 flex justify-between items-center">
+                            <span class="font-bold text-sm sm:text-base text-slate-200">市場券資比</span>
+                            <span id="detailRatio" class="font-bold text-lg sm:text-xl text-amber-400">-- %</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 量化多空特徵解構 (6 欄) -->
+            <div class="lg:col-span-6 bg-slate-900/80 rounded-xl p-3.5 sm:p-5 border border-slate-800">
+                <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+                    <span class="text-base sm:text-xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="gauge" class="w-5 h-5 text-purple-400"></i>
+                        量化價量引擎五大維度信號
+                    </span>
+                    <span id="quantRatingText" class="text-xs sm:text-sm font-mono font-bold text-rose-400 px-3 py-1 bg-slate-800/80 rounded-lg">--</span>
+                </div>
+
+                <!-- 五大維度評分列表 -->
+                <div id="quantSignalsList" class="space-y-2.5">
+                    <!-- 動態由 JavaScript 填入 -->
+                    <div class="text-center py-6 text-sm sm:text-base text-slate-400">計算量化指標中...</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- JavaScript 核心邏輯 -->
+    <script>
+        // 初始化 Lucide 圖示
+        lucide.createIcons();
+
+        // 全域變數
+        let klineChart = null;
+        let candleSeries = null;
+        let volumeSeries = null;
+        let ma5Series = null;
+        let ma20Series = null;
+        let ma60Series = null;
+        let treemapChart = null;
+        let currentInterval = '5m';
+        let latestDashboardData = null;
+        let eventSource = null;
+        let previousPrice = null;
+
+        // 頁面載入完成後初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            initLightweightChart();
+            initTreemapChart();
+            fetchInitialData();
+            startSSEStream();
+
+            // 視窗縮放事件自適應
+            window.addEventListener('resize', () => {
+                if (klineChart) {
+                    const container = document.getElementById('klineChartContainer');
+                    klineChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+                }
+                if (treemapChart) {
+                    treemapChart.resize();
+                }
+            });
+        });
+
+        // 1. 初始化 TradingView Lightweight Charts
+        function initLightweightChart() {
+            const container = document.getElementById('klineChartContainer');
+            klineChart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                layout: {
+                    background: { color: '#090d16' },
+                    textColor: '#94a3b8',
+                    fontFamily: 'JetBrains Mono, monospace',
+                },
+                grid: {
+                    vertLines: { color: '#172033' },
+                    horzLines: { color: '#172033' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#1e293b',
+                    scaleMargins: {
+                        top: 0.1,
+                        bottom: 0.25,
+                    },
+                },
+                timeScale: {
+                    borderColor: '#1e293b',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // K 線系列 (台股紅漲綠跌)
+            candleSeries = klineChart.addCandlestickSeries({
+                upColor: '#ef4444',
+                downColor: '#22c55e',
+                borderUpColor: '#ef4444',
+                borderDownColor: '#22c55e',
+                wickUpColor: '#ef4444',
+                wickDownColor: '#22c55e',
+            });
+
+            // 成交量副圖
+            volumeSeries = klineChart.addHistogramSeries({
+                color: '#38bdf8',
+                priceFormat: { type: 'volume' },
+                priceScaleId: '',
+                scaleMargins: {
+                    top: 0.8,
+                    bottom: 0,
+                },
+            });
+
+            // 均線系列（隱藏橫向價格虛線與右座標軸標籤，保持圖表畫面清爽）
+            ma5Series = klineChart.addLineSeries({
+                color: '#eab308',
+                lineWidth: 1.5,
+                title: '5MA',
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+            ma20Series = klineChart.addLineSeries({
+                color: '#a855f7',
+                lineWidth: 1.5,
+                title: '20MA',
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+            ma60Series = klineChart.addLineSeries({
+                color: '#38bdf8',
+                lineWidth: 1.5,
+                title: '60MA',
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+
+            // 十字線移動懸停顯示 OHLCV 數值 (顯示台灣時間 UTC+8)
+            klineChart.subscribeCrosshairMove((param) => {
+                if (!param || !param.time || !param.seriesPrices) {
+                    return;
+                }
+                const candlePrice = param.seriesPrices.get(candleSeries);
+                const volPrice = param.seriesPrices.get(volumeSeries);
+                if (candlePrice) {
+                    let dStr = param.time;
+                    if (typeof param.time === 'number') {
+                        // 因時間戳已加上 28800 秒，以 UTC 函數取得精確台灣時間月/日 時:分
+                        const dt = new Date(param.time * 1000);
+                        const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                        const d = String(dt.getUTCDate()).padStart(2, '0');
+                        const h = String(dt.getUTCHours()).padStart(2, '0');
+                        const min = String(dt.getUTCMinutes()).padStart(2, '0');
+                        dStr = `${m}/${d} ${h}:${min}`;
+                    } else if (typeof param.time === 'object' && param.time !== null) {
+                        dStr = `${param.time.year}-${String(param.time.month).padStart(2, '0')}-${String(param.time.day).padStart(2, '0')}`;
+                    }
+                    document.getElementById('ttDate').innerText = dStr;
+                    document.getElementById('ttOpen').innerText = candlePrice.open?.toFixed(2) || '--';
+                    document.getElementById('ttHigh').innerText = candlePrice.high?.toFixed(2) || '--';
+                    document.getElementById('ttLow').innerText = candlePrice.low?.toFixed(2) || '--';
+                    document.getElementById('ttClose').innerText = candlePrice.close?.toFixed(2) || '--';
+                    document.getElementById('ttVol').innerText = volPrice ? Math.round(volPrice).toLocaleString() : '--';
+                }
+            });
+        }
+
+        // 2. 初始化 Apache ECharts Treemap
+        function initTreemapChart() {
+            const container = document.getElementById('treemapContainer');
+            treemapChart = echarts.init(container);
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    borderColor: '#334155',
+                    textStyle: { color: '#f8fafc' },
+                    formatter: function (info) {
+                        const d = info.data;
+                        if (!d) return '';
+                        const sign = d.changePct >= 0 ? '+' : '';
+                        const colorHex = d.changePct > 0 ? '#ef4444' : (d.changePct < 0 ? '#22c55e' : '#94a3b8');
+                        return `
+                            <div style="font-family: JetBrains Mono, monospace; padding: 4px;">
+                                <div style="font-size: 14px; font-weight: bold; color: #ffffff;">${d.name} (${d.code})</div>
+                                <div style="margin-top: 4px;">市值權重: <b>${d.weight}%</b></div>
+                                <div>成交價: <b style="color:#ffffff;">${d.price}</b></div>
+                                <div>漲跌額: <b style="color:${colorHex};">${sign}${d.change} (${sign}${d.changePct.toFixed(2)}%)</b></div>
+                                <div>成交量: <b>${(d.volume || 0).toLocaleString()} 張</b></div>
+                            </div>
+                        `;
+                    }
+                },
+                series: [{
+                    type: 'treemap',
+                    width: '100%',
+                    height: '100%',
+                    roam: false,
+                    nodeClick: false,
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        position: 'inside',
+                        align: 'center',
+                        verticalAlign: 'middle',
+                        overflow: 'none',
+                        formatter: function (params) {
+                            const d = params.data;
+                            if (!d) return '';
+                            const sign = d.changePct > 0 ? '+' : '';
+                            const pctStr = `${sign}${d.changePct.toFixed(2)}%`;
+
+                            // 1. 特大權值股 (台積電 >= 20%)：大字體垂直水平置中，醒目且不超出
+                            if (d.weight >= 20) {
+                                return `{tsmcName|${d.name}}\n{tsmcCode|${d.code}}\n{tsmcPrice|${d.price}}\n{tsmcChange|${pctStr}}`;
+                            }
+                            // 2. 次大權值股 (鴻海、聯發科 >= 4%)
+                            if (d.weight >= 4) {
+                                return `{largeName|${d.name}}\n{largeCode|${d.code}}\n{largePrice|${d.price}}\n{largeChange|${pctStr}}`;
+                            }
+                            // 3. 中型權值股 (1.3% <= weight < 4%)：3 行置中 (名稱、價格、漲跌幅)
+                            if (d.weight >= 1.3) {
+                                const nameTag = d.name.length > 3 ? 'medNameLong' : 'medName';
+                                return `{${nameTag}|${d.name}}\n{medPrice|${d.price}}\n{medChange|${pctStr}}`;
+                            }
+                            // 4. 小型權值股 (weight < 1.3%)：2 行置中 (名稱、漲跌幅)，確保不溢出窄小方塊
+                            const smallNameTag = d.name.length > 3 ? 'smallNameLong' : 'smallName';
+                            return `{${smallNameTag}|${d.name}}\n{smallChange|${pctStr}}`;
+                        },
+                        rich: {
+                            // 特大 (台積電)
+                            tsmcName: { fontSize: 28, fontWeight: 'bold', color: '#ffffff', lineHeight: 38, align: 'center' },
+                            tsmcCode: { fontSize: 15, color: 'rgba(255,255,255,0.75)', lineHeight: 22, align: 'center' },
+                            tsmcPrice: { fontSize: 26, fontWeight: 'bold', color: '#ffffff', lineHeight: 36, align: 'center' },
+                            tsmcChange: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', lineHeight: 28, align: 'center' },
+
+                            // 次大 (鴻海, 聯發科)
+                            largeName: { fontSize: 18, fontWeight: 'bold', color: '#ffffff', lineHeight: 24, align: 'center' },
+                            largeCode: { fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 16, align: 'center' },
+                            largePrice: { fontSize: 17, fontWeight: 'bold', color: '#ffffff', lineHeight: 23, align: 'center' },
+                            largeChange: { fontSize: 14, fontWeight: 'bold', color: '#ffffff', lineHeight: 20, align: 'center' },
+
+                            // 中型 (富邦金, 廣達, 台達電, 國泰金, 中信金, 日月光)
+                            medName: { fontSize: 13, fontWeight: 'bold', color: '#ffffff', lineHeight: 18, align: 'center' },
+                            medNameLong: { fontSize: 11, fontWeight: 'bold', color: '#ffffff', lineHeight: 15, align: 'center' },
+                            medPrice: { fontSize: 13, fontWeight: '600', color: '#ffffff', lineHeight: 17, align: 'center' },
+                            medChange: { fontSize: 12, fontWeight: 'bold', color: '#ffffff', lineHeight: 16, align: 'center' },
+
+                            // 小型 (兆豐金, 聯電, 統一, 緯穎, 智邦, 中華電)
+                            smallName: { fontSize: 12, fontWeight: 'bold', color: '#ffffff', lineHeight: 16, align: 'center' },
+                            smallNameLong: { fontSize: 10, fontWeight: 'bold', color: '#ffffff', lineHeight: 13, align: 'center' },
+                            smallChange: { fontSize: 11, fontWeight: 'bold', color: '#ffffff', lineHeight: 15, align: 'center' },
+                        }
+                    },
+                    itemStyle: {
+                        borderColor: '#0a0e1a',
+                        borderWidth: 2,
+                        gapWidth: 2
+                    },
+                    data: []
+                }]
+            };
+            treemapChart.setOption(option);
+        }
+
+        // 計算成分股熱力圖顏色（台股慣例：紅漲、綠跌、平盤深灰）
+        function getTreemapColor(changePct) {
+            if (changePct >= 3.0) return '#b91c1c';      // 深鮮紅
+            if (changePct >= 1.5) return '#dc2626';      // 鮮紅
+            if (changePct > 0.0) return '#ef4444';       // 紅
+            if (changePct === 0.0) return '#334155';     // 平盤冷灰
+            if (changePct > -1.5) return '#16a34a';      // 綠
+            if (changePct > -3.0) return '#15803d';      // 深綠
+            return '#14532d';                            // 重挫暗綠
+        }
+
+        // 3. 抓取初始靜態快照與 K 線資料
+        async function fetchInitialData() {
+            try {
+                const res = await fetch('/api/dashboard');
+                const data = await res.json();
+                latestDashboardData = data;
+                updateDashboardUI(data);
+                fetchKlineData(currentInterval);
+            } catch (err) {
+                console.error("Dashboard fetch error:", err);
+                setConnectionStatus('error', '連線異常，正在嘗試重連...');
+            }
+        }
+
+        // 抓取 K 線資料並設定到圖表
+        async function fetchKlineData(interval) {
+            try {
+                const res = await fetch(`/api/kline?interval=${interval}`);
+                const resData = await res.json();
+                const klines = resData.data || [];
+                if (klines.length === 0) return;
+
+                // 轉換為 Lightweight Charts 格式
+                const candleData = [];
+                const volumeData = [];
+                const closes = [];
+
+                klines.forEach(k => {
+                    candleData.push({
+                        time: k.time,
+                        open: k.open,
+                        high: k.high,
+                        low: k.low,
+                        close: k.close
+                    });
+                    volumeData.push({
+                        time: k.time,
+                        value: k.volume,
+                        color: k.close >= k.open ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)'
+                    });
+                    closes.push(k.close);
+                });
+
+                candleSeries.setData(candleData);
+                volumeSeries.setData(volumeData);
+
+                // 計算並繪製 5MA, 20MA, 60MA
+                const ma5Data = [];
+                const ma20Data = [];
+                const ma60Data = [];
+
+                for (let i = 0; i < klines.length; i++) {
+                    const time = klines[i].time;
+                    if (i >= 4) {
+                        const sum5 = closes.slice(i - 4, i + 1).reduce((a, b) => a + b, 0);
+                        ma5Data.push({ time, value: parseFloat((sum5 / 5).toFixed(2)) });
+                    }
+                    if (i >= 19) {
+                        const sum20 = closes.slice(i - 19, i + 1).reduce((a, b) => a + b, 0);
+                        ma20Data.push({ time, value: parseFloat((sum20 / 20).toFixed(2)) });
+                    }
+                    if (i >= 59) {
+                        const sum60 = closes.slice(i - 59, i + 1).reduce((a, b) => a + b, 0);
+                        ma60Data.push({ time, value: parseFloat((sum60 / 60).toFixed(2)) });
+                    }
+                }
+
+                ma5Series.setData(ma5Data);
+                ma20Series.setData(ma20Data);
+                ma60Series.setData(ma60Data);
+
+                // 更新頂部最新 MA 顯示
+                if (ma5Data.length > 0) document.getElementById('valMA5').innerText = ma5Data[ma5Data.length - 1].value;
+                if (ma20Data.length > 0) document.getElementById('valMA20').innerText = ma20Data[ma20Data.length - 1].value;
+                if (ma60Data.length > 0) document.getElementById('valMA60').innerText = ma60Data[ma60Data.length - 1].value;
+
+                // 預設可視 K 棒範圍（依使用者截圖需求，設定約 70~80 根 K 棒，保留右側邊界舒適區間）
+                const total = candleData.length;
+                if (total > 0) {
+                    const visibleBars = currentInterval === '5m' ? 70 : (currentInterval === '60m' ? 75 : 85);
+                    klineChart.timeScale().setVisibleLogicalRange({
+                        from: Math.max(0, total - visibleBars),
+                        to: total + 3,
+                    });
+                }
+            } catch (err) {
+                console.error("K-line fetch error:", err);
+            }
+        }
+
+        // 切換 K 線週期 (5分K / 60分K / 日K)
+        function switchKlineInterval(interval) {
+            currentInterval = interval;
+            const btn5m = document.getElementById('btn5m');
+            const btn60m = document.getElementById('btn60m');
+            const btn1d = document.getElementById('btn1d');
+            const activeClass = "px-3.5 py-1.5 rounded-md text-white bg-sky-600 shadow-sm transition text-sm sm:text-base font-bold";
+            const inactiveClass = "px-3.5 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700/60 transition text-sm sm:text-base font-bold";
+            
+            if (btn5m) btn5m.className = interval === '5m' ? activeClass : inactiveClass;
+            if (btn60m) btn60m.className = interval === '60m' ? activeClass : inactiveClass;
+            if (btn1d) btn1d.className = interval === '1d' ? activeClass : inactiveClass;
+            
+            fetchKlineData(interval);
+        }
+
+        // 手動刷新按鈕點擊觸發 (旋轉動畫 + 重新抓取)
+        async function triggerManualRefresh() {
+            const icon = document.getElementById('refreshIcon');
+            if (icon) icon.classList.add('animate-spin');
+            await fetchInitialData();
+            setTimeout(() => {
+                if (icon) icon.classList.remove('animate-spin');
+            }, 800);
+        }
+
+        // 4. 更新儀表板 UI 各區塊
+        function updateDashboardUI(data) {
+            if (!data) return;
+
+            // --- A. 加權指數 (TAIEX) ---
+            const taiex = data.taiex;
+            if (taiex) {
+                const priceEl = document.getElementById('taiexPrice');
+                const cardEl = document.getElementById('taiexCard');
+                const currentPrice = taiex.price;
+
+                // 檢查是否觸發 Last Tick Flash (價格跳動閃爍)
+                if (previousPrice !== null && previousPrice !== currentPrice) {
+                    if (currentPrice > previousPrice) {
+                        cardEl.classList.remove('tick-flash-red', 'tick-flash-green');
+                        void cardEl.offsetWidth; // 觸發重繪
+                        cardEl.classList.add('tick-flash-red');
+                    } else {
+                        cardEl.classList.remove('tick-flash-red', 'tick-flash-green');
+                        void cardEl.offsetWidth;
+                        cardEl.classList.add('tick-flash-green');
+                    }
+                }
+                previousPrice = currentPrice;
+
+                priceEl.innerText = currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const sign = taiex.change > 0 ? '+' : '';
+                document.getElementById('taiexChange').innerText = `${sign}${taiex.change.toFixed(2)}`;
+                document.getElementById('taiexChangePct').innerText = `(${sign}${taiex.change_pct.toFixed(2)}%)`;
+
+                const changeBadge = document.getElementById('taiexChangeBadge');
+                if (taiex.change > 0) {
+                    changeBadge.className = "flex items-center font-mono text-sm font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                    priceEl.className = "text-2xl sm:text-3xl font-black font-mono tracking-tight text-rose-400";
+                } else if (taiex.change < 0) {
+                    changeBadge.className = "flex items-center font-mono text-sm font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                    priceEl.className = "text-2xl sm:text-3xl font-black font-mono tracking-tight text-emerald-400";
+                } else {
+                    changeBadge.className = "flex items-center font-mono text-sm font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700";
+                    priceEl.className = "text-2xl sm:text-3xl font-black font-mono tracking-tight text-slate-100";
+                }
+
+                document.getElementById('taiexTime').innerText = taiex.time || '--';
+                document.getElementById('taiexOpen').innerText = taiex.open?.toFixed(2) || '--';
+                document.getElementById('taiexHigh').innerText = taiex.high?.toFixed(2) || '--';
+                document.getElementById('taiexLow').innerText = taiex.low?.toFixed(2) || '--';
+                document.getElementById('taiexPrevClose').innerText = taiex.prev_close?.toFixed(2) || '--';
+            }
+
+            // --- B. 三大法人買賣超 ---
+            const inst = data.institution;
+            if (inst) {
+                const totalEl = document.getElementById('instTotal');
+                totalEl.innerText = `${inst.total > 0 ? '+' : ''}${inst.total.toFixed(2)}`;
+                totalEl.className = `text-2xl sm:text-3xl font-black font-mono tracking-tight ${inst.total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                
+                document.getElementById('instForeign').innerText = `${inst.foreign > 0 ? '+' : ''}${inst.foreign.toFixed(2)}`;
+                document.getElementById('instForeign').className = `block font-semibold ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('instTrust').innerText = `${inst.trust > 0 ? '+' : ''}${inst.trust.toFixed(2)}`;
+                document.getElementById('instTrust').className = `block font-semibold ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('instDealer').innerText = `${inst.dealer_total > 0 ? '+' : ''}${inst.dealer_total.toFixed(2)}`;
+                document.getElementById('instDealer').className = `block font-semibold ${inst.dealer_total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('instDate').innerText = inst.date || '--';
+
+                // 細項看板
+                document.getElementById('detailForeign').innerText = `${inst.foreign > 0 ? '+' : ''}${inst.foreign.toFixed(2)} 億`;
+                document.getElementById('detailForeign').className = `font-bold ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('detailTrust').innerText = `${inst.trust > 0 ? '+' : ''}${inst.trust.toFixed(2)} 億`;
+                document.getElementById('detailTrust').className = `font-bold ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('detailDealerSelf').innerText = `${inst.dealer_self > 0 ? '+' : ''}${inst.dealer_self.toFixed(2)} 億`;
+                document.getElementById('detailDealerSelf').className = `font-bold ${inst.dealer_self >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('detailDealerHedge').innerText = `${inst.dealer_hedge > 0 ? '+' : ''}${inst.dealer_hedge.toFixed(2)} 億`;
+                document.getElementById('detailDealerHedge').className = `font-bold ${inst.dealer_hedge >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('detailTotal').innerText = `${inst.total > 0 ? '+' : ''}${inst.total.toFixed(2)} 億`;
+                document.getElementById('detailTotal').className = `font-black text-sm ${inst.total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+            }
+
+            // --- C. 信用交易 (融資融券) ---
+            const margin = data.margin;
+            if (margin) {
+                document.getElementById('marginBalance').innerText = `${margin.margin_balance_billion} 億`;
+                const mDiffEl = document.getElementById('marginChange');
+                const mSign = margin.margin_change_billion > 0 ? '+' : '';
+                mDiffEl.innerText = `${mSign}${margin.margin_change_billion} 億`;
+                mDiffEl.className = `text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${margin.margin_change_billion >= 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}`;
+
+                document.getElementById('shortBalance').innerText = `${margin.short_balance_shares.toLocaleString()} 張`;
+                const sSign = margin.short_change_shares > 0 ? '+' : '';
+                const sDiffEl = document.getElementById('shortChange');
+                sDiffEl.innerText = `${sSign}${margin.short_change_shares.toLocaleString()} 張`;
+                sDiffEl.className = `block font-semibold ${margin.short_change_shares >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('shortMarginRatio').innerText = `${margin.short_margin_ratio}%`;
+                document.getElementById('marginDate').innerText = margin.date || '--';
+
+                // 細項
+                document.getElementById('detailMarginBal').innerText = `${margin.margin_balance_billion} 億`;
+                document.getElementById('detailMarginDiff').innerText = `${mSign}${margin.margin_change_billion} 億`;
+                document.getElementById('detailMarginDiff').className = `font-bold ${margin.margin_change_billion >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+                document.getElementById('detailShortBal').innerText = `${margin.short_balance_shares.toLocaleString()} 張`;
+                document.getElementById('detailShortDiff').innerText = `${sSign}${margin.short_change_shares.toLocaleString()} 張`;
+                document.getElementById('detailShortDiff').className = `font-bold ${margin.short_change_shares >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                document.getElementById('detailRatio').innerText = `${margin.short_margin_ratio} %`;
+            }
+
+            // --- D. 量化多空機率引擎 ---
+            const quant = data.quant;
+            if (quant) {
+                document.getElementById('bullProbText').innerText = `${quant.bull_prob}%`;
+                document.getElementById('bearProbText').innerText = `${quant.bear_prob}%`;
+                document.getElementById('bullBar').style.width = `${quant.bull_prob}%`;
+                document.getElementById('bearBar').style.width = `${quant.bear_prob}%`;
+
+                const ratingBadge = document.getElementById('quantRatingBadge');
+                ratingBadge.innerText = quant.rating || '--';
+                ratingBadge.className = `text-[10px] font-mono px-2 py-0.5 rounded-full border ${quant.badge_bg}`;
+
+                document.getElementById('quantRatingText').innerText = quant.rating || '--';
+                document.getElementById('quantRatingText').className = `text-xs font-mono font-bold ${quant.rating_color}`;
+
+                document.getElementById('quantRSI').innerText = quant.rsi || '--';
+                document.getElementById('quantMATrend').innerText = quant.scores?.ma?.score > 0 ? '偏多排列' : (quant.scores?.ma?.score < 0 ? '偏空排列' : '糾結整理');
+
+                // 填入五大維度信號細項
+                const sigContainer = document.getElementById('quantSignalsList');
+                if (quant.scores) {
+                    const keys = Object.keys(quant.scores);
+                    let html = '';
+                    keys.forEach(k => {
+                        const sc = quant.scores[k];
+                        const isPos = sc.score > 0;
+                        const scoreColor = isPos ? 'text-rose-400 bg-rose-500/10 border-rose-500/30' : (sc.score < 0 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 bg-slate-800 border-slate-700');
+                        html += `
+                            <div class="bg-slate-950/70 p-3 sm:p-3.5 rounded-xl border border-slate-800/60 flex items-center justify-between gap-3">
+                                <div>
+                                    <div class="font-bold text-sm sm:text-base text-slate-100">${sc.title}</div>
+                                    <div class="text-xs sm:text-sm text-slate-300 mt-1">${sc.desc}</div>
+                                </div>
+                                <span class="font-mono text-sm sm:text-base font-bold px-3 py-1 rounded-lg border ${scoreColor}">
+                                    ${sc.score > 0 ? '+' : ''}${sc.score}
+                                </span>
+                            </div>
+                        `;
+                    });
+                    sigContainer.innerHTML = html;
+                }
+            }
+
+            // --- E. 0050 權重熱力圖更新 ---
+            const comps = data.components || [];
+            if (comps.length > 0 && treemapChart) {
+                const treemapData = comps.map(c => ({
+                    name: c.name,
+                    code: c.code,
+                    value: c.weight, // 方塊大小按權重比例
+                    weight: c.weight,
+                    price: c.price,
+                    change: c.change,
+                    changePct: c.change_pct,
+                    volume: c.volume,
+                    itemStyle: {
+                        color: getTreemapColor(c.change_pct)
+                    }
+                }));
+
+                treemapChart.setOption({
+                    series: [{
+                        data: treemapData
+                    }]
+                });
+            }
+
+            // 狀態與時間更新
+            document.getElementById('lastUpdatedTime').innerText = data.last_updated?.split(' ')[1] || '--';
+            if (data.status_text) {
+                document.getElementById('bannerText').innerText = `📡 ${data.status_text}`;
+            }
+        }
+
+        // 5. 建立 Server-Sent Events (SSE) 即時串流
+        function startSSEStream() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/stream');
+
+            eventSource.addEventListener('tick', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    setConnectionStatus('live', '即時連線中 (Live)');
+                    updateDashboardUI(data);
+                } catch (e) {
+                    console.error("SSE parse error:", e);
+                }
+            });
+
+            eventSource.onopen = () => {
+                setConnectionStatus('live', '即時連線中 (Live)');
+            };
+
+            eventSource.onerror = (err) => {
+                console.warn("SSE connection closed or error. Reconnecting...");
+                setConnectionStatus('reconnecting', '嘗試重連中...');
+            };
+        }
+
+        // 設定頂部連線狀態徽章 (保持放大字體)
+        function setConnectionStatus(status, text) {
+            const badge = document.getElementById('statusBadge');
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+
+            if (statusText) statusText.innerText = text;
+            if (badge && dot) {
+                if (status === 'live') {
+                    badge.className = "flex items-center gap-2.5 px-4 py-2 rounded-full text-base font-mono font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/40 transition-all shadow-sm";
+                    dot.className = "w-3.5 h-3.5 rounded-full bg-emerald-400 animate-pulse";
+                } else if (status === 'reconnecting') {
+                    badge.className = "flex items-center gap-2.5 px-4 py-2 rounded-full text-base font-mono font-bold border bg-amber-500/10 text-amber-400 border-amber-500/40 transition-all shadow-sm";
+                    dot.className = "w-3.5 h-3.5 rounded-full bg-amber-400 animate-ping";
+                } else {
+                    badge.className = "flex items-center gap-2.5 px-4 py-2 rounded-full text-base font-mono font-bold border bg-rose-500/10 text-rose-400 border-rose-500/40 transition-all shadow-sm";
+                    dot.className = "w-3.5 h-3.5 rounded-full bg-rose-400";
+                }
+            }
+        }
+    </script>
+</body>
+</html>

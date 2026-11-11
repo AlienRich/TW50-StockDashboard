@@ -52,36 +52,36 @@ class MarketDataManager:
         # 內存快取 (In-Memory Cache)
         self.cache: Dict[str, Any] = {
             "taiex": {
-                "price": 49806.37,
-                "change": -16.18,
-                "change_pct": -0.03,
-                "open": 49857.32,
-                "high": 49966.89,
-                "low": 49567.52,
-                "prev_close": 49822.55,
-                "volume": 3865.2,  # 億元或百萬
-                "volume_shares": 2861937,
-                "time": "13:33:00",
+                "price": 44041.66,
+                "change": 1329.74,
+                "change_pct": 3.11,
+                "open": 43135.76,
+                "high": 44041.66,
+                "low": 42708.05,
+                "prev_close": 42711.92,
+                "volume": 4865.2,  # 億元
+                "volume_shares": 3861937,
+                "time": "13:30:00",
                 "date": datetime.now(TW_TZ).strftime("%Y-%m-%d"),
             },
             "components": [],
             "institution": {
-                "foreign": 128.45,       # 億元
-                "trust": 45.20,          # 億元
-                "dealer_self": 36.12,    # 億元
-                "dealer_hedge": -18.91,  # 億元
-                "dealer_total": 17.21,   # 億元
-                "total": 190.86,         # 億元
+                "foreign": -341.17,      # 億元
+                "trust": 398.91,         # 億元
+                "dealer_self": -55.39,   # 億元
+                "dealer_hedge": -119.97, # 億元
+                "dealer_total": -175.36, # 億元
+                "total": -117.62,        # 億元
                 "date": datetime.now(TW_TZ).strftime("%Y-%m-%d"),
             },
             "futures": {
-                "foreign_oi": -42850,       # 外資期貨未平倉留倉淨口數 (口)
-                "trust_oi": 21450,          # 投信期貨未平倉留倉淨口數 (口)
-                "dealer_oi": -2940,         # 自營商期貨未平倉留倉淨口數 (口)
-                "total_oi": -24340,         # 三大法人期貨合計淨留倉 (口)
-                "foreign_long_oi": 34120,   # 外資多方口數
-                "foreign_short_oi": 76970,  # 外資空方口數
-                "contract": "台指期貨",
+                "foreign_oi": -103473,      # 外資期貨未平倉留倉淨口數 (口)
+                "trust_oi": 98519,          # 投信期貨未平倉留倉淨口數 (口)
+                "dealer_oi": 85,            # 自營商期貨未平倉留倉淨口數 (口)
+                "total_oi": -4869,          # 三大法人期貨合計淨留倉 (口)
+                "foreign_long_oi": 9875,    # 外資多方口數
+                "foreign_short_oi": 113348, # 外資空方口數
+                "contract": "台指期貨 (TX)",
                 "date": datetime.now(TW_TZ).strftime("%Y-%m-%d"),
             },
             "margin": {
@@ -316,6 +316,7 @@ class MarketDataManager:
                     lows = quote.get("low", [])
                     closes = quote.get("close", [])
                     vols = quote.get("volume", [])
+                    meta = result_5m[0].get("meta", {})
                     
                     seen_5m = set()
                     parsed_5m = []
@@ -334,6 +335,25 @@ class MarketDataManager:
                             })
                     if len(parsed_5m) > 10:
                         self.cache["kline_5m"] = parsed_5m
+                        # 同步將 Yahoo Finance 的最新指數行情更新至首頁大卡片（作為 TWSE MIS 的強力備援）
+                        latest_bar = parsed_5m[-1]
+                        latest_price = meta.get("regularMarketPrice") or latest_bar["close"]
+                        prev_close = meta.get("chartPreviousClose") or self.cache["taiex"]["prev_close"]
+                        chg = round(latest_price - prev_close, 2)
+                        chg_pct = round((chg / prev_close) * 100, 2) if prev_close else 0.0
+                        last_ts = timestamps[-1] if timestamps else time.time()
+                        
+                        self.cache["taiex"].update({
+                            "price": round(latest_price, 2),
+                            "change": chg,
+                            "change_pct": chg_pct,
+                            "prev_close": round(prev_close, 2),
+                            "open": round(parsed_5m[0]["open"] if parsed_5m else latest_price, 2),
+                            "high": round(meta.get("regularMarketDayHigh") or latest_bar["high"], 2),
+                            "low": round(meta.get("regularMarketDayLow") or latest_bar["low"], 2),
+                            "time": datetime.fromtimestamp(last_ts, tz=TW_TZ).strftime("%H:%M:%S"),
+                            "date": datetime.fromtimestamp(last_ts, tz=TW_TZ).strftime("%Y-%m-%d"),
+                        })
 
             # 2. 抓取加權指數 60 分鐘線 (涵蓋近 12 個月)
             url_60m = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=60m&range=1y"
@@ -451,7 +471,7 @@ class MarketDataManager:
         try:
             # 優先嘗試抓取台指期貨契約 (TX) 明細
             url_tx = "https://openapi.taifex.com.tw/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate"
-            res_tx = await self.client.get(url_tx, timeout=6.0)
+            res_tx = await self.client.get(url_tx, timeout=8.0)
             if res_tx.status_code == 200:
                 data_tx = res_tx.json()
                 if isinstance(data_tx, list) and len(data_tx) > 0:
@@ -466,9 +486,28 @@ class MarketDataManager:
                             name = str(item.get("Item") or item.get("Name") or "")
                             date_str = str(item.get("Date") or date_str)
                             
-                            net_oi = item.get("NetVolume") or item.get("FuturesNetOIQty") or item.get("OpenInterestNet") or 0
-                            long_oi = item.get("LongVolume") or item.get("FuturesLongOIQty") or item.get("OpenInterestLong") or 0
-                            short_oi = item.get("ShortVolume") or item.get("FuturesShortOIQty") or item.get("OpenInterestShort") or 0
+                            # TAIFEX 官方欄位名稱為 "OpenInterest(Net)", "OpenInterest(Long)", "OpenInterest(Short)"
+                            net_oi = (
+                                item.get("OpenInterest(Net)")
+                                or item.get("OpenInterestNet")
+                                or item.get("NetVolume")
+                                or item.get("FuturesNetOIQty")
+                                or 0
+                            )
+                            long_oi = (
+                                item.get("OpenInterest(Long)")
+                                or item.get("OpenInterestLong")
+                                or item.get("LongVolume")
+                                or item.get("FuturesLongOIQty")
+                                or 0
+                            )
+                            short_oi = (
+                                item.get("OpenInterest(Short)")
+                                or item.get("OpenInterestShort")
+                                or item.get("ShortVolume")
+                                or item.get("FuturesShortOIQty")
+                                or 0
+                            )
                             
                             try:
                                 net_oi = int(str(net_oi).replace(",", "").strip())
@@ -501,7 +540,7 @@ class MarketDataManager:
 
             # 備援：抓取三大法人全期貨契約分類總表
             url_all = "https://openapi.taifex.com.tw/v1/MarketDataOfMajorInstitutionalTradersDividedByFuturesAndOptionsBytheDate"
-            res_all = await self.client.get(url_all, timeout=6.0)
+            res_all = await self.client.get(url_all, timeout=8.0)
             if res_all.status_code == 200:
                 data_all = res_all.json()
                 if isinstance(data_all, list) and len(data_all) > 0:
@@ -509,11 +548,26 @@ class MarketDataManager:
                     f_long_oi, f_short_oi = 0, 0
                     date_str = ""
                     for item in data_all:
-                        name = str(item.get("Name") or item.get("Identity") or "")
+                        name = str(item.get("Item") or item.get("Name") or item.get("Identity") or "")
                         date_str = str(item.get("Date") or date_str)
-                        net_oi = item.get("FuturesNetOIQty") or item.get("FutureNetOIQty") or 0
-                        long_oi = item.get("FuturesLongOIQty") or item.get("FutureLongOIQty") or 0
-                        short_oi = item.get("FuturesShortOIQty") or item.get("FutureShortOIQty") or 0
+                        net_oi = (
+                            item.get("FuturesOpenInterest(Net)")
+                            or item.get("FuturesNetOIQty")
+                            or item.get("FutureNetOIQty")
+                            or 0
+                        )
+                        long_oi = (
+                            item.get("FuturesOpenInterest(Long)")
+                            or item.get("FuturesLongOIQty")
+                            or item.get("FutureLongOIQty")
+                            or 0
+                        )
+                        short_oi = (
+                            item.get("FuturesOpenInterest(Short)")
+                            or item.get("FuturesShortOIQty")
+                            or item.get("FutureShortOIQty")
+                            or 0
+                        )
                         try:
                             net_oi = int(str(net_oi).replace(",", "").strip())
                             long_oi = int(str(long_oi).replace(",", "").strip())
@@ -530,17 +584,18 @@ class MarketDataManager:
                         elif "自營" in name:
                             dealer_oi = net_oi
                     
-                    self.cache["futures"] = {
-                        "foreign_oi": foreign_oi,
-                        "trust_oi": trust_oi,
-                        "dealer_oi": dealer_oi,
-                        "total_oi": foreign_oi + trust_oi + dealer_oi,
-                        "foreign_long_oi": f_long_oi,
-                        "foreign_short_oi": f_short_oi,
-                        "contract": "全市場期貨",
-                        "date": date_str or datetime.now(TW_TZ).strftime("%Y-%m-%d"),
-                    }
-                    return True
+                    if foreign_oi != 0 or trust_oi != 0 or dealer_oi != 0:
+                        self.cache["futures"] = {
+                            "foreign_oi": foreign_oi,
+                            "trust_oi": trust_oi,
+                            "dealer_oi": dealer_oi,
+                            "total_oi": foreign_oi + trust_oi + dealer_oi,
+                            "foreign_long_oi": f_long_oi,
+                            "foreign_short_oi": f_short_oi,
+                            "contract": "全市場期貨",
+                            "date": date_str or datetime.now(TW_TZ).strftime("%Y-%m-%d"),
+                        }
+                        return True
         except Exception as e:
             logger.warning(f"TAIFEX futures fetch failed: {e}")
             return False

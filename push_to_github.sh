@@ -22,12 +22,14 @@ if ! git config user.name >/dev/null 2>&1 || ! git config user.email >/dev/null 
     echo "----------------------------------------------------"
 fi
 
-# 2. 初始化 Git (若尚未初始化)
+# 2. 初始化 Git 與啟用憑證記憶 (Credential Helper)
 if [ ! -d ".git" ]; then
     echo "📦 初始化本地 Git 儲存庫..."
     git init
     git branch -M main
 fi
+# 啟用憑證記憶：只要輸入一次 Token，未來終端機與背景推送自動免密碼！
+git config credential.helper store
 
 # 3. 檢查或設定 GitHub 遠端儲存庫網址
 CURRENT_REMOTE="$(git remote get-url origin 2>/dev/null || true)"

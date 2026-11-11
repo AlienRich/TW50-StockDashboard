@@ -539,7 +539,7 @@
                 wickDownColor: '#22c55e',
             });
 
-            // 成交量副圖
+            // 成交量副圖 (隱藏價格基準線與 0 刻度標籤)
             volumeSeries = klineChart.addHistogramSeries({
                 color: '#38bdf8',
                 priceFormat: { type: 'volume' },
@@ -548,6 +548,8 @@
                     top: 0.8,
                     bottom: 0,
                 },
+                priceLineVisible: false,
+                lastValueVisible: false,
             });
 
             // 均線系列（隱藏橫向價格虛線與右座標軸標籤，保持圖表畫面清爽）
@@ -788,6 +790,35 @@
                 if (ma5Data.length > 0) document.getElementById('valMA5').innerText = ma5Data[ma5Data.length - 1].value;
                 if (ma20Data.length > 0) document.getElementById('valMA20').innerText = ma20Data[ma20Data.length - 1].value;
                 if (ma60Data.length > 0) document.getElementById('valMA60').innerText = ma60Data[ma60Data.length - 1].value;
+
+                // 自動以最新一根 K 棒初始化頂部開高低收量資訊列 (避免顯示 -- 或 0)
+                if (candleData.length > 0) {
+                    const lastBar = candleData[candleData.length - 1];
+                    const lastVol = volumeData[volumeData.length - 1];
+                    let dStr = lastBar.time;
+                    if (typeof dStr === 'number') {
+                        const dt = new Date(dStr * 1000);
+                        const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+                        const d = String(dt.getUTCDate()).padStart(2, '0');
+                        const h = String(dt.getUTCHours()).padStart(2, '0');
+                        const min = String(dt.getUTCMinutes()).padStart(2, '0');
+                        dStr = `${m}/${d} ${h}:${min}`;
+                    } else if (typeof dStr === 'object' && dStr !== null) {
+                        dStr = `${dStr.year}-${String(dStr.month).padStart(2, '0')}-${String(dStr.day).padStart(2, '0')}`;
+                    }
+                    const ttDate = document.getElementById('ttDate');
+                    const ttOpen = document.getElementById('ttOpen');
+                    const ttHigh = document.getElementById('ttHigh');
+                    const ttLow = document.getElementById('ttLow');
+                    const ttClose = document.getElementById('ttClose');
+                    const ttVol = document.getElementById('ttVol');
+                    if (ttDate) ttDate.innerText = dStr;
+                    if (ttOpen) ttOpen.innerText = lastBar.open ? lastBar.open.toFixed(2) : '--';
+                    if (ttHigh) ttHigh.innerText = lastBar.high ? lastBar.high.toFixed(2) : '--';
+                    if (ttLow) ttLow.innerText = lastBar.low ? lastBar.low.toFixed(2) : '--';
+                    if (ttClose) ttClose.innerText = lastBar.close ? lastBar.close.toFixed(2) : '--';
+                    if (ttVol) ttVol.innerText = lastVol && lastVol.value ? Math.round(lastVol.value).toLocaleString() : '--';
+                }
 
                 // 預設可視 K 棒範圍（依使用者截圖需求，設定約 70~80 根 K 棒，保留右側邊界舒適區間）
                 const total = candleData.length;

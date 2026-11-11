@@ -52,11 +52,11 @@ class MarketDataManager:
         # 內存快取 (In-Memory Cache)
         self.cache: Dict[str, Any] = {
             "taiex": {
-                "price": 44041.66,
-                "change": 1329.74,
-                "change_pct": 3.11,
+                "price": 44257.15,
+                "change": 1545.23,
+                "change_pct": 3.62,
                 "open": 43135.76,
-                "high": 44041.66,
+                "high": 44257.15,
                 "low": 42708.05,
                 "prev_close": 42711.92,
                 "volume": 4865.2,  # 億元
@@ -335,25 +335,6 @@ class MarketDataManager:
                             })
                     if len(parsed_5m) > 10:
                         self.cache["kline_5m"] = parsed_5m
-                        # 同步將 Yahoo Finance 的最新指數行情更新至首頁大卡片（作為 TWSE MIS 的強力備援）
-                        latest_bar = parsed_5m[-1]
-                        latest_price = meta.get("regularMarketPrice") or latest_bar["close"]
-                        prev_close = meta.get("chartPreviousClose") or self.cache["taiex"]["prev_close"]
-                        chg = round(latest_price - prev_close, 2)
-                        chg_pct = round((chg / prev_close) * 100, 2) if prev_close else 0.0
-                        last_ts = timestamps[-1] if timestamps else time.time()
-                        
-                        self.cache["taiex"].update({
-                            "price": round(latest_price, 2),
-                            "change": chg,
-                            "change_pct": chg_pct,
-                            "prev_close": round(prev_close, 2),
-                            "open": round(parsed_5m[0]["open"] if parsed_5m else latest_price, 2),
-                            "high": round(meta.get("regularMarketDayHigh") or latest_bar["high"], 2),
-                            "low": round(meta.get("regularMarketDayLow") or latest_bar["low"], 2),
-                            "time": datetime.fromtimestamp(last_ts, tz=TW_TZ).strftime("%H:%M:%S"),
-                            "date": datetime.fromtimestamp(last_ts, tz=TW_TZ).strftime("%Y-%m-%d"),
-                        })
 
             # 2. 抓取加權指數 60 分鐘線 (涵蓋近 12 個月)
             url_60m = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=60m&range=1y"
@@ -417,8 +398,28 @@ class MarketDataManager:
                                     "close": round(closes[i], 2),
                                     "volume": int(vols[i] or 0),
                                 })
-                    if len(parsed_1d) > 20:
+                    if len(parsed_1d) >= 2:
                         self.cache["kline_1d"] = parsed_1d
+                        today_bar = parsed_1d[-1]
+                        yesterday_bar = parsed_1d[-2]
+                        prev_close = yesterday_bar["close"]
+                        
+                        # 最新成交價：優先取 5分K最新一根或日K最新一根
+                        latest_price = self.cache["kline_5m"][-1]["close"] if self.cache["kline_5m"] else today_bar["close"]
+                        chg = round(latest_price - prev_close, 2)
+                        chg_pct = round((chg / prev_close) * 100, 2) if prev_close else 0.0
+                        
+                        self.cache["taiex"].update({
+                            "price": round(latest_price, 2),
+                            "change": chg,
+                            "change_pct": chg_pct,
+                            "prev_close": round(prev_close, 2),
+                            "open": round(today_bar["open"], 2),
+                            "high": round(max(today_bar["high"], latest_price), 2),
+                            "low": round(min(today_bar["low"], latest_price), 2),
+                            "date": today_bar["time"],
+                            "time": datetime.now(TW_TZ).strftime("%H:%M:%S"),
+                        })
         except Exception as e:
             logger.warning(f"Yahoo klines fetch failed: {e}")
 
@@ -440,8 +441,8 @@ class MarketDataManager:
                     except ValueError:
                         diff_val = 0.0
                     
-                    if "外資自營商" in name:
-                        # 重要：必須跳過「外資自營商」，因其已包含在「外資及陸資」之內，避免覆蓋外資數據成 0.00
+                    if name == "外資自營商":
+                        # 重要：必須精確比對「外資自營商」，避免誤傷「外資及陸資(不含外資自營商)」
                         continue
                     elif "外資" in name or "陸資" in name:
                         foreign = round(diff_val, 2)

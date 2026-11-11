@@ -181,25 +181,37 @@
                 </div>
             </div>
 
-            <!-- 2. 三大法人買賣超卡片 -->
-            <div class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm">
-                <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
-                    <span class="flex items-center gap-1.5 font-medium">
-                        <i data-lucide="briefcase" class="w-4 h-4 text-blue-400"></i>
-                        三大法人買賣超 (淨額)
-                    </span>
-                    <span id="instDate" class="font-mono text-xs sm:text-sm text-slate-400">--</span>
-                </div>
-                <div class="flex items-baseline justify-between mt-1">
-                    <div id="instTotal" class="text-3xl sm:text-4xl font-black font-mono tracking-tight text-rose-400">
-                        --
+            <!-- 2. 三大法人買賣超卡片 (現貨 + 期貨留倉) -->
+            <div class="bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between text-sm sm:text-base text-slate-300 mb-1">
+                        <span class="flex items-center gap-1.5 font-medium">
+                            <i data-lucide="briefcase" class="w-4 h-4 text-blue-400"></i>
+                            三大法人買賣超 (現貨+期貨)
+                        </span>
+                        <span id="instDate" class="font-mono text-xs sm:text-sm text-slate-400">--</span>
                     </div>
-                    <span class="text-sm font-mono text-slate-300">合計億元</span>
+                    <div class="flex items-baseline justify-between mt-1">
+                        <div id="instTotal" class="text-3xl sm:text-4xl font-black font-mono tracking-tight text-rose-400">
+                            --
+                        </div>
+                        <span class="text-sm font-mono text-slate-300">現貨合計億元</span>
+                    </div>
                 </div>
-                <div class="grid grid-cols-3 gap-1.5 mt-3 pt-2.5 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-300">
-                    <div>外資 <span id="instForeign" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
-                    <div>投信 <span id="instTrust" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
-                    <div>自營商 <span id="instDealer" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+
+                <div class="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <!-- 現貨買賣超 -->
+                    <div class="grid grid-cols-3 gap-1.5 text-xs sm:text-sm font-mono text-slate-300">
+                        <div>外資現貨 <span id="instForeign" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                        <div>投信現貨 <span id="instTrust" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                        <div>自營現貨 <span id="instDealer" class="block text-sm sm:text-base font-bold mt-0.5">--</span></div>
+                    </div>
+                    <!-- 期貨留倉口數 -->
+                    <div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-800/60 text-xs sm:text-sm font-mono text-slate-300">
+                        <div>外資期貨 <span id="instFutForeign" class="block text-sm sm:text-base font-bold mt-0.5">-- 口</span></div>
+                        <div>投信期貨 <span id="instFutTrust" class="block text-sm sm:text-base font-bold mt-0.5">-- 口</span></div>
+                        <div>自營期貨 <span id="instFutDealer" class="block text-sm sm:text-base font-bold mt-0.5">-- 口</span></div>
+                    </div>
                 </div>
             </div>
 
@@ -339,63 +351,91 @@
                         <i data-lucide="layers" class="w-5 h-5 text-sky-400"></i>
                         籌碼結構與信用槓桿看板
                     </span>
-                    <span class="text-xs sm:text-sm font-mono text-slate-400">單位：新台幣億元 / 張數</span>
+                    <span class="text-xs sm:text-sm font-mono text-slate-400">單位：新台幣億元 / 張數 / 口數</span>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-base">
-                    <!-- 左欄：三大法人買賣超統計 -->
-                    <div class="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/60 space-y-3 font-mono">
-                        <div class="font-bold text-sm sm:text-base text-slate-300 pb-2 border-b border-slate-800 flex justify-between">
-                            <span>三大法人項目</span>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-base">
+                    <!-- 第 1 欄：三大法人現貨買賣超 -->
+                    <div class="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800/60 space-y-2.5 font-mono">
+                        <div class="font-bold text-xs sm:text-sm text-slate-300 pb-1.5 border-b border-slate-800 flex justify-between">
+                            <span>現貨買賣項目</span>
                             <span>買賣超淨額</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">外資及陸資</span>
-                            <span id="detailForeign" class="font-bold text-base sm:text-lg">--</span>
+                            <span id="detailForeign" class="font-bold text-sm sm:text-base">--</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">投信基金</span>
-                            <span id="detailTrust" class="font-bold text-base sm:text-lg">--</span>
+                            <span id="detailTrust" class="font-bold text-sm sm:text-base">--</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
-                            <span class="text-slate-300">自營商 (自行買賣)</span>
-                            <span id="detailDealerSelf" class="font-bold text-base sm:text-lg">--</span>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">自營(自行)</span>
+                            <span id="detailDealerSelf" class="font-bold text-sm sm:text-base">--</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
-                            <span class="text-slate-300">自營商 (避險)</span>
-                            <span id="detailDealerHedge" class="font-bold text-base sm:text-lg">--</span>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">自營(避險)</span>
+                            <span id="detailDealerHedge" class="font-bold text-sm sm:text-base">--</span>
                         </div>
-                        <div class="pt-2.5 border-t border-slate-800 flex justify-between items-center">
-                            <span class="font-bold text-sm sm:text-base text-slate-200">三大法人合計</span>
-                            <span id="detailTotal" class="font-black text-lg sm:text-xl">--</span>
+                        <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+                            <span class="font-bold text-xs sm:text-sm text-slate-200">現貨合計</span>
+                            <span id="detailTotal" class="font-black text-sm sm:text-base">--</span>
                         </div>
                     </div>
 
-                    <!-- 右欄：融資融券全市場指標 -->
-                    <div class="bg-slate-950/60 p-3.5 sm:p-4 rounded-xl border border-slate-800/60 space-y-3 font-mono">
-                        <div class="font-bold text-sm sm:text-base text-slate-300 pb-2 border-b border-slate-800 flex justify-between">
+                    <!-- 第 2 欄：三大法人期貨未平倉留倉口數 -->
+                    <div class="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800/60 space-y-2.5 font-mono">
+                        <div class="font-bold text-xs sm:text-sm text-slate-300 pb-1.5 border-b border-slate-800 flex justify-between">
+                            <span>期貨未平倉 (OI)</span>
+                            <span>留倉淨口數</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">外資期貨留倉</span>
+                            <span id="detailFutForeign" class="font-bold text-sm sm:text-base text-emerald-400">-- 口</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">投信期貨留倉</span>
+                            <span id="detailFutTrust" class="font-bold text-sm sm:text-base text-rose-400">-- 口</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">自營期貨留倉</span>
+                            <span id="detailFutDealer" class="font-bold text-sm sm:text-base text-emerald-400">-- 口</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
+                            <span class="text-slate-300">外資多方未平倉</span>
+                            <span id="detailFutForeignLong" class="font-bold text-sm sm:text-base text-slate-200">-- 口</span>
+                        </div>
+                        <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+                            <span class="font-bold text-xs sm:text-sm text-slate-200">期貨合計</span>
+                            <span id="detailFutTotal" class="font-black text-sm sm:text-base">-- 口</span>
+                        </div>
+                    </div>
+
+                    <!-- 第 3 欄：融資融券全市場指標 -->
+                    <div class="bg-slate-950/60 p-3 sm:p-3.5 rounded-xl border border-slate-800/60 space-y-2.5 font-mono">
+                        <div class="font-bold text-xs sm:text-sm text-slate-300 pb-1.5 border-b border-slate-800 flex justify-between">
                             <span>信用槓桿指標</span>
                             <span>餘額 / 增減</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">全市場融資餘額</span>
-                            <span id="detailMarginBal" class="font-bold text-base sm:text-lg text-slate-100">-- 億</span>
+                            <span id="detailMarginBal" class="font-bold text-sm sm:text-base text-slate-100">-- 億</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">融資單日增減</span>
-                            <span id="detailMarginDiff" class="font-bold text-base sm:text-lg">-- 億</span>
+                            <span id="detailMarginDiff" class="font-bold text-sm sm:text-base">-- 億</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">全市場融券餘額</span>
-                            <span id="detailShortBal" class="font-bold text-base sm:text-lg text-slate-100">-- 張</span>
+                            <span id="detailShortBal" class="font-bold text-sm sm:text-base text-slate-100">-- 張</span>
                         </div>
-                        <div class="flex justify-between items-center text-sm sm:text-base">
+                        <div class="flex justify-between items-center text-xs sm:text-sm">
                             <span class="text-slate-300">融券單日增減</span>
-                            <span id="detailShortDiff" class="font-bold text-base sm:text-lg">-- 張</span>
+                            <span id="detailShortDiff" class="font-bold text-sm sm:text-base">-- 張</span>
                         </div>
-                        <div class="pt-2.5 border-t border-slate-800 flex justify-between items-center">
-                            <span class="font-bold text-sm sm:text-base text-slate-200">市場券資比</span>
-                            <span id="detailRatio" class="font-bold text-lg sm:text-xl text-amber-400">-- %</span>
+                        <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+                            <span class="font-bold text-xs sm:text-sm text-slate-200">市場券資比</span>
+                            <span id="detailRatio" class="font-bold text-sm sm:text-base text-amber-400">-- %</span>
                         </div>
                     </div>
                 </div>
@@ -838,39 +878,102 @@
                 document.getElementById('taiexPrevClose').innerText = taiex.prev_close?.toFixed(2) || '--';
             }
 
-            // --- B. 三大法人買賣超 ---
+            // --- B. 三大法人買賣超 (現貨) ---
             const inst = data.institution;
             if (inst) {
                 const totalEl = document.getElementById('instTotal');
-                totalEl.innerText = `${inst.total > 0 ? '+' : ''}${inst.total.toFixed(2)}`;
-                totalEl.className = `text-2xl sm:text-3xl font-black font-mono tracking-tight ${inst.total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const tVal = inst.total;
+                const sign = tVal > 0 ? '+' : '';
+                totalEl.innerText = `${sign}${tVal.toFixed(2)}`;
+                totalEl.className = `text-3xl sm:text-4xl font-black font-mono tracking-tight ${tVal >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
                 
-                document.getElementById('instForeign').innerText = `${inst.foreign > 0 ? '+' : ''}${inst.foreign.toFixed(2)}`;
-                document.getElementById('instForeign').className = `block font-semibold ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const fSign = inst.foreign > 0 ? '+' : '';
+                const fEl = document.getElementById('instForeign');
+                fEl.innerText = `${fSign}${inst.foreign.toFixed(2)}`;
+                fEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('instTrust').innerText = `${inst.trust > 0 ? '+' : ''}${inst.trust.toFixed(2)}`;
-                document.getElementById('instTrust').className = `block font-semibold ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const trSign = inst.trust > 0 ? '+' : '';
+                const trEl = document.getElementById('instTrust');
+                trEl.innerText = `${trSign}${inst.trust.toFixed(2)}`;
+                trEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('instDealer').innerText = `${inst.dealer_total > 0 ? '+' : ''}${inst.dealer_total.toFixed(2)}`;
-                document.getElementById('instDealer').className = `block font-semibold ${inst.dealer_total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const dSign = inst.dealer_total > 0 ? '+' : '';
+                const dEl = document.getElementById('instDealer');
+                dEl.innerText = `${dSign}${inst.dealer_total.toFixed(2)}`;
+                dEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${inst.dealer_total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('instDate').innerText = inst.date || '--';
+                document.getElementById('instDate').innerText = inst.date ? inst.date.replace(/-/g, '') : '--';
 
                 // 細項看板
-                document.getElementById('detailForeign').innerText = `${inst.foreign > 0 ? '+' : ''}${inst.foreign.toFixed(2)} 億`;
-                document.getElementById('detailForeign').className = `font-bold ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                document.getElementById('detailForeign').innerText = `${fSign}${inst.foreign.toFixed(2)} 億`;
+                document.getElementById('detailForeign').className = `font-bold text-sm sm:text-base ${inst.foreign >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('detailTrust').innerText = `${inst.trust > 0 ? '+' : ''}${inst.trust.toFixed(2)} 億`;
-                document.getElementById('detailTrust').className = `font-bold ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                document.getElementById('detailTrust').innerText = `${trSign}${inst.trust.toFixed(2)} 億`;
+                document.getElementById('detailTrust').className = `font-bold text-sm sm:text-base ${inst.trust >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('detailDealerSelf').innerText = `${inst.dealer_self > 0 ? '+' : ''}${inst.dealer_self.toFixed(2)} 億`;
-                document.getElementById('detailDealerSelf').className = `font-bold ${inst.dealer_self >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const dsSign = inst.dealer_self > 0 ? '+' : '';
+                document.getElementById('detailDealerSelf').innerText = `${dsSign}${inst.dealer_self.toFixed(2)} 億`;
+                document.getElementById('detailDealerSelf').className = `font-bold text-sm sm:text-base ${inst.dealer_self >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('detailDealerHedge').innerText = `${inst.dealer_hedge > 0 ? '+' : ''}${inst.dealer_hedge.toFixed(2)} 億`;
-                document.getElementById('detailDealerHedge').className = `font-bold ${inst.dealer_hedge >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                const dhSign = inst.dealer_hedge > 0 ? '+' : '';
+                document.getElementById('detailDealerHedge').innerText = `${dhSign}${inst.dealer_hedge.toFixed(2)} 億`;
+                document.getElementById('detailDealerHedge').className = `font-bold text-sm sm:text-base ${inst.dealer_hedge >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('detailTotal').innerText = `${inst.total > 0 ? '+' : ''}${inst.total.toFixed(2)} 億`;
-                document.getElementById('detailTotal').className = `font-black text-sm ${inst.total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+                document.getElementById('detailTotal').innerText = `${sign}${tVal.toFixed(2)} 億`;
+                document.getElementById('detailTotal').className = `font-black text-sm sm:text-base ${tVal >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+            }
+
+            // --- B2. 三大法人期貨未平倉留倉口數 ---
+            const fut = data.futures;
+            if (fut) {
+                const formatOi = (val) => {
+                    const s = val > 0 ? '+' : '';
+                    return `${s}${val.toLocaleString()} 口`;
+                };
+                const getOiClass = (val) => val > 0 ? 'text-rose-400' : (val < 0 ? 'text-emerald-400' : 'text-slate-300');
+
+                // 頂部小卡期貨口數
+                const fFutEl = document.getElementById('instFutForeign');
+                if (fFutEl) {
+                    fFutEl.innerText = formatOi(fut.foreign_oi || 0);
+                    fFutEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${getOiClass(fut.foreign_oi || 0)}`;
+                }
+                const trFutEl = document.getElementById('instFutTrust');
+                if (trFutEl) {
+                    trFutEl.innerText = formatOi(fut.trust_oi || 0);
+                    trFutEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${getOiClass(fut.trust_oi || 0)}`;
+                }
+                const dFutEl = document.getElementById('instFutDealer');
+                if (dFutEl) {
+                    dFutEl.innerText = formatOi(fut.dealer_oi || 0);
+                    dFutEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${getOiClass(fut.dealer_oi || 0)}`;
+                }
+
+                // 下方詳細看板期貨口數
+                const dFutF = document.getElementById('detailFutForeign');
+                if (dFutF) {
+                    dFutF.innerText = formatOi(fut.foreign_oi || 0);
+                    dFutF.className = `font-bold text-sm sm:text-base ${getOiClass(fut.foreign_oi || 0)}`;
+                }
+                const dFutTr = document.getElementById('detailFutTrust');
+                if (dFutTr) {
+                    dFutTr.innerText = formatOi(fut.trust_oi || 0);
+                    dFutTr.className = `font-bold text-sm sm:text-base ${getOiClass(fut.trust_oi || 0)}`;
+                }
+                const dFutD = document.getElementById('detailFutDealer');
+                if (dFutD) {
+                    dFutD.innerText = formatOi(fut.dealer_oi || 0);
+                    dFutD.className = `font-bold text-sm sm:text-base ${getOiClass(fut.dealer_oi || 0)}`;
+                }
+                const dFutFLong = document.getElementById('detailFutForeignLong');
+                if (dFutFLong) {
+                    dFutFLong.innerText = `${(fut.foreign_long_oi || 0).toLocaleString()} 口`;
+                }
+                const dFutTot = document.getElementById('detailFutTotal');
+                if (dFutTot) {
+                    dFutTot.innerText = formatOi(fut.total_oi || 0);
+                    dFutTot.className = `font-black text-sm sm:text-base ${getOiClass(fut.total_oi || 0)}`;
+                }
             }
 
             // --- C. 信用交易 (融資融券) ---

@@ -850,14 +850,24 @@
             fetchKlineData(interval);
         }
 
-        // 手動刷新按鈕點擊觸發 (旋轉動畫 + 重新抓取)
+        // 手動刷新按鈕點擊觸發 (旋轉動畫 + 強制立即重新爬取)
         async function triggerManualRefresh() {
             const icon = document.getElementById('refreshIcon');
             if (icon) icon.classList.add('animate-spin');
-            await fetchInitialData();
-            setTimeout(() => {
-                if (icon) icon.classList.remove('animate-spin');
-            }, 800);
+            try {
+                const res = await fetch('/api/refresh');
+                const data = await res.json();
+                latestDashboardData = data;
+                updateDashboardUI(data);
+                await fetchKlineData(currentInterval);
+            } catch (err) {
+                console.error("Manual refresh error:", err);
+                await fetchInitialData();
+            } finally {
+                setTimeout(() => {
+                    if (icon) icon.classList.remove('animate-spin');
+                }, 800);
+            }
         }
 
         // 4. 更新儀表板 UI 各區塊
@@ -933,7 +943,16 @@
                 dEl.innerText = `${dSign}${inst.dealer_total.toFixed(2)}`;
                 dEl.className = `block text-sm sm:text-base font-bold mt-0.5 ${inst.dealer_total >= 0 ? 'text-rose-400' : 'text-emerald-400'}`;
 
-                document.getElementById('instDate').innerText = inst.date ? inst.date.replace(/-/g, '') : '--';
+                const isLive = data.market_status === 'LIVE';
+                const instDateEl = document.getElementById('instDate');
+                if (instDateEl) {
+                    const rawDate = inst.date ? inst.date.replace(/-/g, '') : '--';
+                    if (isLive) {
+                        instDateEl.innerHTML = `${rawDate} <span class="text-amber-400 font-sans text-xs font-normal">（盤後15:00公布）</span>`;
+                    } else {
+                        instDateEl.innerText = rawDate;
+                    }
+                }
 
                 // 細項看板
                 document.getElementById('detailForeign').innerText = `${fSign}${inst.foreign.toFixed(2)} 億`;
@@ -1107,6 +1126,10 @@
             document.getElementById('lastUpdatedTime').innerText = data.last_updated?.split(' ')[1] || '--';
             if (data.status_text) {
                 document.getElementById('bannerText').innerText = `📡 ${data.status_text}`;
+            }
+            const phaseEl = document.getElementById('marketPhaseText');
+            if (phaseEl) {
+                phaseEl.innerText = data.market_status === 'LIVE' ? '盤中即時交易' : '定盤收盤價';
             }
         }
 

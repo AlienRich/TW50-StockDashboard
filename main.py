@@ -300,6 +300,58 @@ class MarketDataManager:
             logger.warning(f"TWSE MIS fetch failed: {e}")
             return False
 
+    async def fetch_yahoo_components(self):
+        """利用 Yahoo Finance 為 0050 前 15 大成分股提供 100% 穩健之盤中即時行情 (解決海外雲端 IP 受限)"""
+        async def fetch_single(cfg):
+            code = cfg["code"]
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{code}.TW?interval=1d&range=5d"
+            try:
+                res = await self.client.get(url, timeout=5.0)
+                if res.status_code == 200:
+                    data = res.json()
+                    res_arr = data.get("chart", {}).get("result", [])
+                    if res_arr:
+                        meta = res_arr[0].get("meta", {})
+                        quote = res_arr[0].get("indicators", {}).get("quote", [{}])[0]
+                        closes = [c for c in quote.get("close", []) if c is not None]
+                        opens = [o for o in quote.get("open", []) if o is not None]
+                        highs = [h for h in quote.get("high", []) if h is not None]
+                        lows = [l for l in quote.get("low", []) if l is not None]
+                        vols = [v for v in quote.get("volume", []) if v is not None]
+                        
+                        price = round(meta.get("regularMarketPrice") or (closes[-1] if closes else cfg["base_price"]), 2)
+                        prev_close = round(closes[-2] if len(closes) >= 2 else (meta.get("chartPreviousClose") or price), 2)
+                        change = round(price - prev_close, 2)
+                        change_pct = round((change / prev_close) * 100, 2) if prev_close else 0.0
+                        
+                        return {
+                            "code": code,
+                            "name": cfg["name"],
+                            "weight": cfg["weight"],
+                            "price": price,
+                            "change": change,
+                            "change_pct": change_pct,
+                            "prev_close": prev_close,
+                            "open": round(opens[-1] if opens else price, 2),
+                            "high": round(highs[-1] if highs else price, 2),
+                            "low": round(lows[-1] if lows else price, 2),
+                            "volume": int(vols[-1] or 0) if vols else 0,
+                        }
+            except Exception:
+                pass
+            return None
+
+        try:
+            tasks = [fetch_single(cfg) for cfg in CONSTITUENTS_CONFIG]
+            results = await asyncio.gather(*tasks)
+            updated = [r for r in results if r]
+            if len(updated) >= 8:
+                self.cache["components"] = updated
+                return True
+        except Exception as e:
+            logger.warning(f"Yahoo components fetch failed: {e}")
+        return False
+
     async def fetch_yahoo_klines(self):
         try:
             # 1. 抓取加權指數 5 分鐘線 (涵蓋近 1 個月)
@@ -784,29 +836,35 @@ class MarketDataManager:
             }
         }
 
-    async def update_all_data(self):
+    async def update_all_data(self, force: bool = False):
         cur_time = time.time()
-        if cur_time - self.last_fetch_time < self.fetch_cooldown:
-            return  # 限流保護
+        if not force and (cur_time - self.last_fetch_time < self.fetch_cooldown):
+            return  # 非強制更新時遵守限流保護
         self.last_fetch_time = cur_time
 
         is_open = self._is_market_open()
+        
+        # 1. 抓取成分股：先試 TWSE MIS，若海外受限或價格未變動則啟用 Yahoo Finance 雙重備援
         twse_ok = await self.fetch_twse_mis_batch()
+        if not twse_ok or not self.cache["components"] or self.cache["components"][0]["price"] == CONSTITUENTS_CONFIG[0]["base_price"]:
+            await self.fetch_yahoo_components()
+            
+        # 2. 抓取加權指數 K 線與盤價
         await self.fetch_yahoo_klines()
         
-        # 三大法人與融資券為每日盤後公布資料，至少間隔 1 小時 (3600 秒) 檢查一次即可，極致保護 IP
-        if cur_time - self.last_daily_fetch_time > 3600.0 or not self.cache["institution"]["foreign"]:
+        # 3. 三大法人與融資券 (盤後資料，每小時檢查一次，force 時強制更新)
+        if force or (cur_time - self.last_daily_fetch_time > 3600.0) or not self.cache["institution"]["foreign"]:
             await self.fetch_institutional_chips()
             await self.fetch_margin_data()
             await self.fetch_taifex_futures()
             self.last_daily_fetch_time = cur_time
 
-        if is_open and twse_ok:
+        if is_open:
             self.cache["market_status"] = "LIVE"
-            self.cache["status_text"] = "盤中即時即時串流 (更新週期: 5分鐘)"
+            self.cache["status_text"] = "🟢 盤中即時交易模式 (開盤中 09:00 - 13:30)"
         else:
             self.cache["market_status"] = "AFTER_HOURS_SETTLED"
-            self.cache["status_text"] = "已載入最新收盤定盤價 (盤後模式)"
+            self.cache["status_text"] = "🌙 已載入最新收盤定盤價 (盤後模式)"
 
         self._recalculate_quant_engine()
         self.cache["last_updated"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
@@ -861,6 +919,13 @@ async def get_index():
 @app.get("/api/dashboard")
 async def get_dashboard():
     """取得儀表板完整靜態快照"""
+    return JSONResponse(content=market_mgr.cache)
+
+@app.get("/api/refresh")
+@app.post("/api/refresh")
+async def manual_refresh():
+    """強制手動立即更新（繞過 5 分鐘冷卻期）"""
+    await market_mgr.update_all_data(force=True)
     return JSONResponse(content=market_mgr.cache)
 
 @app.get("/api/kline")

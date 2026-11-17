@@ -387,6 +387,9 @@ class MarketDataManager:
                             })
                     if len(parsed_5m) > 10:
                         self.cache["kline_5m"] = parsed_5m
+                        # 儲存官方昨日收盤價 (previousClose)
+                        if meta.get("previousClose"):
+                            self.cache["taiex"]["official_prev_close"] = float(meta["previousClose"])
 
             # 2. 抓取加權指數 60 分鐘線 (涵蓋近 12 個月)
             url_60m = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=60m&range=1y"
@@ -450,13 +453,48 @@ class MarketDataManager:
                                     "close": round(closes[i], 2),
                                     "volume": int(vols[i] or 0),
                                 })
+                    
+                    # 健壯性補齊：若 Yahoo 1d 原始資料跳過了昨日交易日 (例如週一缺失)，利用 5分K 自動聚合補全歷史日K棒
+                    today_str = datetime.now(TW_TZ).strftime("%Y-%m-%d")
+                    official_prev_close = self.cache["taiex"].get("official_prev_close")
+                    
+                    if self.cache.get("kline_5m"):
+                        bars_by_date = {}
+                        for b in self.cache["kline_5m"]:
+                            dt_str = datetime.fromtimestamp(b["time"] - 28800, tz=TW_TZ).strftime("%Y-%m-%d")
+                            if dt_str not in bars_by_date:
+                                bars_by_date[dt_str] = []
+                            bars_by_date[dt_str].append(b)
+                        
+                        for dt_str, b_list in bars_by_date.items():
+                            if dt_str not in seen_dates and dt_str < today_str:
+                                # 這是歷史交易日，補進日 K
+                                o = round(b_list[0]["open"], 2)
+                                h = round(max(x["high"] for x in b_list), 2)
+                                l = round(min(x["low"] for x in b_list), 2)
+                                c = round(official_prev_close or b_list[-1]["close"], 2)
+                                v = sum(x.get("volume", 0) for x in b_list)
+                                parsed_1d.append({
+                                    "time": dt_str,
+                                    "open": o,
+                                    "high": h,
+                                    "low": l,
+                                    "close": c,
+                                    "volume": v,
+                                })
+                                seen_dates.add(dt_str)
+                    
+                    parsed_1d.sort(key=lambda x: x["time"])
+                    
                     if len(parsed_1d) >= 2:
                         self.cache["kline_1d"] = parsed_1d
                         today_bar = parsed_1d[-1]
                         yesterday_bar = parsed_1d[-2]
-                        prev_close = yesterday_bar["close"]
                         
-                        # 最新成交價：優先取 5分K最新一根或日K最新一根
+                        # 真正的前一交易日昨收：優先使用 Yahoo 官方 meta 中的 previousClose，其次日K前一根
+                        prev_close = official_prev_close or yesterday_bar["close"]
+                        
+                        # 最新成交價：優先取 5分K最新一根或今日日K最新一根
                         latest_price = self.cache["kline_5m"][-1]["close"] if self.cache["kline_5m"] else today_bar["close"]
                         chg = round(latest_price - prev_close, 2)
                         chg_pct = round((chg / prev_close) * 100, 2) if prev_close else 0.0
@@ -903,6 +941,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Modern Web Guidance: 安全回應標頭 (Security Headers)
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 @app.on_event("startup")
 async def startup_event():

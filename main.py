@@ -237,6 +237,11 @@ class MarketDataManager:
                 comp_map = {item["c"]: item for item in msg_array if "c" in item}
                 if "t00" in comp_map:
                     t00 = comp_map["t00"]
+                    if t00.get("y"):
+                        try:
+                            self.cache["taiex"]["twse_prev_close"] = float(t00.get("y"))
+                        except ValueError:
+                            pass
                     price = float(t00.get("z") or t00.get("y") or self.cache["taiex"]["price"])
                     prev_close = float(t00.get("y") or self.cache["taiex"]["prev_close"])
                     change = round(price - prev_close, 2)
@@ -387,9 +392,6 @@ class MarketDataManager:
                             })
                     if len(parsed_5m) > 10:
                         self.cache["kline_5m"] = parsed_5m
-                        # 儲存官方昨日收盤價 (previousClose)
-                        if meta.get("previousClose"):
-                            self.cache["taiex"]["official_prev_close"] = float(meta["previousClose"])
 
             # 2. 抓取加權指數 60 分鐘線 (涵蓋近 12 個月)
             url_60m = "https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?interval=60m&range=1y"
@@ -472,7 +474,7 @@ class MarketDataManager:
                                 o = round(b_list[0]["open"], 2)
                                 h = round(max(x["high"] for x in b_list), 2)
                                 l = round(min(x["low"] for x in b_list), 2)
-                                c = round(official_prev_close or b_list[-1]["close"], 2)
+                                c = round(b_list[-1]["close"], 2)
                                 v = sum(x.get("volume", 0) for x in b_list)
                                 parsed_1d.append({
                                     "time": dt_str,
@@ -491,8 +493,13 @@ class MarketDataManager:
                         today_bar = parsed_1d[-1]
                         yesterday_bar = parsed_1d[-2]
                         
-                        # 真正的前一交易日昨收：優先使用 Yahoo 官方 meta 中的 previousClose，其次日K前一根
-                        prev_close = official_prev_close or yesterday_bar["close"]
+                        # 真正的前一交易日昨收：優先採用台灣證交所官方昨收 (twse_prev_close)，其次取補齊後昨日日K收盤價
+                        twse_prev = self.cache["taiex"].get("twse_prev_close")
+                        y_close = yesterday_bar["close"]
+                        if twse_prev and twse_prev > 10000:
+                            prev_close = twse_prev
+                        else:
+                            prev_close = y_close
                         
                         # 最新成交價：優先取 5分K最新一根或今日日K最新一根
                         latest_price = self.cache["kline_5m"][-1]["close"] if self.cache["kline_5m"] else today_bar["close"]
